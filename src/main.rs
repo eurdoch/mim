@@ -12,6 +12,10 @@ struct Cli {
     /// The user request for a bash command
     #[arg(required = true, num_args = 1..)]
     request: Vec<String>,
+
+    /// Automatically execute the command without asking
+    #[arg(short, long)]
+    yes: bool,
 }
 
 #[derive(Serialize)]
@@ -97,15 +101,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bash_command = bash_command.trim();
     println!("Generated Bash Command: {}", bash_command);
 
-    // Prompt user for confirmation
-    print!("Do you want to execute this command? (y/n): ");
-    io::stdout().flush()?;
+    // Determine if we should execute
+    let should_execute = if cli.yes {
+        true
+    } else {
+        // Prompt user for confirmation
+        print!("Do you want to execute this command? (y/n): ");
+        io::stdout().flush()?;
 
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
 
-    // Check user input
-    if input.trim().eq_ignore_ascii_case("y") {
+        input.trim().eq_ignore_ascii_case("y")
+    };
+
+    // Execute if confirmed
+    if should_execute {
         // Execute the command
         let output = Command::new("bash")
             .arg("-c")
