@@ -2,10 +2,12 @@ use clap::Parser;
 use reqwest::header::{CONTENT_TYPE, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::io::{self, Write};
+use std::process::Command;
 
 #[derive(Parser)]
 #[command(name = "mim")]
-#[command(about = "Generate bash command using Anthropic API")]
+#[command(about = "Generate and execute bash command using Anthropic API")]
 struct Cli {
     /// The user request for a bash command
     #[arg(required = true, num_args = 1..)]
@@ -74,20 +76,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     // Check if the request was successful
-    if response.status().is_success() {
+    let bash_command = if response.status().is_success() {
         // Parse the response
         let anthropic_response: AnthropicResponse = response.json().await?;
         
-        // Print the response text
+        // Extract the command text
         if let Some(content) = anthropic_response.content.first() {
-            if let Some(text) = &content.text {
-                println!("Bash Command: {}", text.trim());
-            }
+            content.text.clone().unwrap_or_default()
+        } else {
+            String::new()
         }
     } else {
         // Print error details if the request failed
         let error_text = response.text().await?;
         println!("Error: {}", error_text);
+        String::new()
+    };
+
+    // Trim the command and print
+    let bash_command = bash_command.trim();
+    println!("Generated Bash Command: {}", bash_command);
+
+    // Prompt user for confirmation
+    print!("Do you want to execute this command? (y/n): ");
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    // Check user input
+    if input.trim().eq_ignore_ascii_case("y") {
+        // Execute the command
+        let output = Command::new("bash")
+            .arg("-c")
+            .arg(bash_command)
+            .output()?;
+
+        // Print stdout
+        if !output.stdout.is_empty() {
+            println!("Command Output:");
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+        }
+
+        // Print stderr if there are any errors
+        if !output.stderr.is_empty() {
+            eprintln!("Command Errors:");
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        }
+
+        // Print exit status
+        println!("Command exited with status: {}", output.status);
+    } else {
+        println!("Command execution cancelled.");
     }
 
     Ok(())
