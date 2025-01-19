@@ -1,3 +1,4 @@
+# mim
 A command line program for running bash commands with Anthropic Haiku model.  
 
 To install 
