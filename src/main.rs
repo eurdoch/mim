@@ -5,17 +5,18 @@ use std::env;
 
 #[derive(Parser)]
 #[command(name = "mim")]
-#[command(about = "Send message to Anthropic API")]
+#[command(about = "Generate bash command using Anthropic API")]
 struct Cli {
-    /// The message to send
+    /// The user request for a bash command
     #[arg(required = true, num_args = 1..)]
-    message: Vec<String>,
+    request: Vec<String>,
 }
 
 #[derive(Serialize)]
 struct AnthropicRequest {
     model: String,
     max_tokens: u32,
+    system: String,
     messages: Vec<Message>,
 }
 
@@ -40,21 +41,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command-line arguments
     let cli = Cli::parse();
     
-    // Join the message words into a single string
-    let message_text = cli.message.join(" ");
+    // Join the request words into a single string
+    let user_request = cli.request.join(" ");
     
     // Get API key from environment variable
     let api_key = env::var("ANTHROPIC_API_KEY")
         .expect("ANTHROPIC_API_KEY must be set");
 
-    // Create the request payload
+    // Create the request payload with system and user messages
     let request_payload = AnthropicRequest {
         model: "claude-3-5-sonnet-20241022".to_string(),
         max_tokens: 1024,
+        system: "You are an expert bash command generator. When given a user request, respond with ONLY a single, concise bash command that precisely accomplishes the task. Do not include any explanation, commentary, or additional text - just the exact bash command needed.".to_string(),
         messages: vec![
             Message {
                 role: "user".to_string(),
-                content: message_text,
+                content: user_request,
             }
         ],
     };
@@ -79,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Print the response text
         if let Some(content) = anthropic_response.content.first() {
             if let Some(text) = &content.text {
-                println!("Response: {}", text);
+                println!("Bash Command: {}", text.trim());
             }
         }
     } else {
