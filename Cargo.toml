@@ -2,6 +2,7 @@
 name = "mim"
 version = "0.1.0"
 edition = "2021"
+bin = ["src/main.rs"]
 
 [dependencies]
 clap = { version = "4.3.0", features = ["derive"] }
@@ -10,3 +11,7 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dotenv = "0.15"
+
+[[bin]]
+name = "mim"
+path = "src/main.rs"
