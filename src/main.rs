@@ -2,12 +2,13 @@ use clap::Parser;
 use reqwest::header::{CONTENT_TYPE, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::io::{self, Write};
+use std::io::{self, Read, Write, BufRead, BufReader};
 use std::process::Command;
 
 #[derive(Parser)]
 #[command(name = "mim")]
 #[command(about = "Generate and execute bash command using Anthropic API")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 struct Cli {
     /// The user request for a bash command
     #[arg(required = true, num_args = 1..)]
@@ -16,6 +17,14 @@ struct Cli {
     /// Automatically execute the command without asking
     #[arg(short, long)]
     yes: bool,
+    
+    /// Explicitly ignore piped input even if available
+    #[arg(short = 'n', long = "no-pipe")]
+    no_pipe: bool,
+    
+    /// Display the version information
+    #[arg(short, long, action = clap::ArgAction::Version)]
+    version: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -50,6 +59,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Join the request words into a single string
     let user_request = cli.request.join(" ");
     
+    // Check if there's piped input available
+    let has_piped_input = !cli.no_pipe && atty::isnt(atty::Stream::Stdin);
+    
+    // Read from stdin if piped input is available and not explicitly ignored
+    let stdin_content = if has_piped_input {
+        let mut buffer = String::new();
+        // Read from stdin but don't consume it completely
+        io::stdin().read_to_string(&mut buffer)?;
+        buffer
+    } else {
+        String::new()
+    };
+    
     // Get API key from environment variable
     let api_key = env::var("ANTHROPIC_API_KEY")
         .expect("ANTHROPIC_API_KEY must be set");
@@ -62,7 +84,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         messages: vec![
             Message {
                 role: "user".to_string(),
-                content: user_request,
+                content: if !stdin_content.is_empty() {
+                    format!("Context:\n{}\n\nRequest: {}", stdin_content, user_request)
+                } else {
+                    user_request
+                },
             }
         ],
     };
@@ -105,14 +131,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let should_execute = if cli.yes {
         true
     } else {
-        // Prompt user for confirmation
-        print!("Do you want to execute this command? (y/n): ");
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-
-        input.trim().eq_ignore_ascii_case("y")
+        // For Unix systems, try to open /dev/tty to read from the terminal directly
+        let result = if cfg!(target_family = "unix") {
+            print!("Do you want to execute this command? (y/n): ");
+            io::stdout().flush()?;
+            
+            match std::fs::OpenOptions::new().read(true).open("/dev/tty") {
+                Ok(file) => {
+                    let mut reader = BufReader::new(file);
+                    let mut input = String::new();
+                    if let Ok(_) = reader.read_line(&mut input) {
+                        Some(input.trim().eq_ignore_ascii_case("y"))
+                    } else {
+                        None
+                    }
+                },
+                Err(_) => None
+            }
+        } else {
+            None
+        };
+        
+        // If we successfully read from /dev/tty, use that result
+        if let Some(should_exec) = result {
+            should_exec
+        } 
+        // Otherwise, if stdin is a terminal, read from there
+        else if atty::is(atty::Stream::Stdin) {
+            print!("Do you want to execute this command? (y/n): ");
+            io::stdout().flush()?;
+            
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            input.trim().eq_ignore_ascii_case("y")
+        } 
+        // If there's no interactive terminal available
+        else {
+            println!("Non-interactive mode detected. Use -y flag to execute commands when stdin is not a terminal.");
+            false
+        }
     };
 
     // Execute if confirmed
