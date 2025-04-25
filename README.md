@@ -32,13 +32,3 @@ In non-interactive environments or scripts, use the -y flag to execute commands 
 ```
 cat file.txt | mim -y format this data as json
 ```
-
-To ignore piped input even when available:
-```
-cat file.txt | mim -n create a new text file
-```
-
-To display the version information:
-```
-mim --version
-```
