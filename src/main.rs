@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create the request payload with system and user messages
     let request_payload = AnthropicRequest {
-        model: "claude-3-5-sonnet-20241022".to_string(),
+        model: "claude-sonnet-4-20250514".to_string(),
         max_tokens: 1024,
         system: "You are an expert bash command generator. When given a user request, respond with ONLY a single, concise bash command that precisely accomplishes the task. Do not include any explanation, commentary, or additional text - just the exact bash command needed.".to_string(),
         messages: vec![
