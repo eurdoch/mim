@@ -3,7 +3,7 @@ A command line program for running bash commands with Anthropic Claude model.
 
 To install 
 ```
-git clone https://github.com/foomprep/mim.git
+git clone https://github.com/eurdoch/mim.git
 cd mim
 cargo install --path .
 ```
